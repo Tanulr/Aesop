@@ -99,6 +99,7 @@ gcloud run deploy aesop \
 |----------|---------|-------------|
 | `AESOP_CREDENTIALS_PATH` | `credentials.json` | Path to service account JSON or OAuth client secrets. On Cloud Run, point to mounted secret (e.g. `/secrets/credentials.json`). |
 | `AESOP_TOKEN_PATH` | `token.json` | For OAuth flow only; not used with service accounts. |
+| `AESOP_GCS_BUCKET` | *(unset)* | If set, generated images are uploaded to this GCS bucket instead of Drive. Use for reliable Slides API image URLs. |
 | `PORT` | `8080` | Set automatically by Cloud Run. |
 
 ## 5. Verify
