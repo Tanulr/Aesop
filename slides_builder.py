@@ -13,7 +13,10 @@ import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
+
+if TYPE_CHECKING:
+    from storybrand_schema import StoryBrandSchema  # noqa: F401
 
 # EMU = English Metric Units (1 inch = 914400 EMU, 1 pt = 12700 EMU)
 PT_TO_EMU = 12_700
@@ -73,6 +76,50 @@ def create_presentation(
     """
     builder = GoogleSlidesBuilder(credentials_path=credentials_path, token_path=token_path)
     return builder.create_and_populate(title=title, slides=slides)
+
+
+def create_presentation_from_storybrand_json(
+    json_str: str,
+    title: str = "StoryBrand Presentation",
+    credentials_path: str = "credentials.json",
+    token_path: str = "token.json",
+) -> str:
+    """Create a presentation from a StoryBrand framework JSON string.
+
+    Parses the JSON into a StoryBrandSchema, converts each slide to SlideContent,
+    and creates the presentation.
+
+    Args:
+        json_str: JSON string matching the StoryBrand schema (slides keyed by id).
+        title: Presentation title.
+        credentials_path: Path to OAuth2 credentials JSON.
+        token_path: Path to store/load OAuth2 token.
+
+    Returns:
+        The presentation URL.
+    """
+    from storybrand_schema import StoryBrandSchema
+
+    schema = StoryBrandSchema.from_json(json_str)
+    slides_content = _storybrand_to_slide_content(schema)
+    return create_presentation(
+        title=title,
+        slides=slides_content,
+        credentials_path=credentials_path,
+        token_path=token_path,
+    )
+
+
+def _storybrand_to_slide_content(schema: StoryBrandSchema) -> list[SlideContent]:
+    """Convert a StoryBrandSchema to a list of SlideContent."""
+    return [
+        SlideContent(
+            title=slide.title,
+            body=slide.description,
+            images=[slide.image_url] if slide.image_url.strip() else [],
+        )
+        for slide in schema.slides
+    ]
 
 
 class GoogleSlidesBuilder:
@@ -491,21 +538,11 @@ class GoogleSlidesBuilder:
 
 
 if __name__ == "__main__":
-    # Example usage
-    slides_content = [
-        SlideContent(
-            title="Welcome",
-            body="This presentation was created programmatically.\nAdd your content here.",
-            images=["https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"],  # Add image URLs or paths when ready
-        ),
-        SlideContent(
-            title="Slide Two",
-            body="More content goes here.",
-            images=[],
-        ),
-    ]
-    url = create_presentation(
-        title="My Auto-Generated Presentation",
-        slides=slides_content,
+    # Example: create from StoryBrand JSON
+    with open("storybrand_example.json") as f:
+        storybrand_json = f.read()
+    url = create_presentation_from_storybrand_json(
+        storybrand_json,
+        title="StoryBrand Framework",
     )
     print(f"Created: {url}")
