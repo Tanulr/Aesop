@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +22,8 @@ SLIDE_WIDTH_PT = 720
 SLIDE_HEIGHT_PT = 540
 MARGIN_PT = 36  # 0.5 inch
 DEFAULT_IMAGE_SIZE_PT = 72  # 1 inch
+IMAGE_COLUMN_WIDTH_PT = 180  # 2.5" for side-by-side layout
+GAP_PT = 18
 
 
 @dataclass
@@ -145,15 +148,31 @@ class GoogleSlidesBuilder:
     def _resolve_image_url(self, source: str) -> str:
         """Convert image source to a publicly accessible URL.
 
-        If source is http(s), return as-is. If local path, upload to Drive
-        and return public URL.
+        If source is http(s), return as-is (converting Drive view URLs to
+        direct download format). If local path, upload to Drive and return
+        public URL.
         """
         if source.startswith(("http://", "https://")):
-            return source
+            return self._convert_drive_url_to_direct(source)
         path = Path(source)
         if not path.exists():
             raise FileNotFoundError(f"Image not found: {source}")
         return self._upload_image_to_drive(path)
+
+    def _convert_drive_url_to_direct(self, url: str) -> str:
+        """Convert Google Drive view/share URLs to direct download format.
+
+        Drive view URLs (e.g. .../file/d/ID/view) return HTML, not image
+        bytes. The Slides API requires a URL that serves raw image data.
+        """
+        # Match: drive.google.com/file/d/FILE_ID/view or /open?id=FILE_ID
+        match = re.search(r"/d/([a-zA-Z0-9_-]+)", url)
+        if not match:
+            match = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url)
+        if match:
+            file_id = match.group(1)
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+        return url
 
     def _upload_image_to_drive(self, path: Path) -> str:
         """Upload local image to Drive, make public, return URL."""
@@ -258,6 +277,8 @@ class GoogleSlidesBuilder:
         self, presentation_id: str, slide_id: str, content: SlideContent, slide_index: int
     ) -> None:
         """Add text and images to a slide via batchUpdate."""
+        from googleapiclient.errors import HttpError
+
         service = self._get_slides_service()
         requests = []
         y_offset_pt = MARGIN_PT  # 0.5" from top
@@ -284,10 +305,20 @@ class GoogleSlidesBuilder:
                     else None,
                 )
             )
-            y_offset_pt += title_height_pt + 18  # 0.25" gap
+            y_offset_pt += title_height_pt + GAP_PT
+
+        # Side-by-side layout when images exist: text left, images right
+        has_images = bool(content.images)
+        content_area_height_pt = SLIDE_HEIGHT_PT - y_offset_pt - MARGIN_PT
+        if has_images:
+            text_width_pt = content_width_pt - IMAGE_COLUMN_WIDTH_PT - GAP_PT
+            image_x_pt = MARGIN_PT + text_width_pt + GAP_PT
+            body_height_pt = min(240, content_area_height_pt)  # ~3.3", keeps it compact
+        else:
+            text_width_pt = content_width_pt
+            body_height_pt = content_area_height_pt
 
         if content.body:
-            body_height_pt = 360  # ~5"
             body_text = (
                 "\n".join(content.body)
                 if isinstance(content.body, list)
@@ -301,23 +332,31 @@ class GoogleSlidesBuilder:
                     text=body_text,
                     x_pt=x_center_pt,
                     y_pt=y_offset_pt,
-                    width_pt=content_width_pt,
+                    width_pt=text_width_pt,
                     height_pt=body_height_pt,
                     font_size_pt=14,
                 )
             )
-            y_offset_pt += body_height_pt + 18
+            if not has_images:
+                y_offset_pt += body_height_pt + GAP_PT
 
+        image_requests = []
+        image_y_pt = y_offset_pt
         for img_idx, img_source in enumerate(content.images):
             try:
                 url = self._resolve_image_url(img_source)
             except FileNotFoundError:
                 continue
             image_id = self._generate_object_id(f"Img_{slide_index}_{img_idx}")
-            size_pt = DEFAULT_IMAGE_SIZE_PT
-            x_pt = MARGIN_PT + (img_idx % 3) * (size_pt + 18)
-            y_pt = y_offset_pt + (img_idx // 3) * (size_pt + 18)
-            requests.append(
+            if has_images:
+                size_pt = IMAGE_COLUMN_WIDTH_PT
+                x_pt = image_x_pt
+                y_pt = image_y_pt + img_idx * (size_pt + GAP_PT)
+            else:
+                size_pt = DEFAULT_IMAGE_SIZE_PT
+                x_pt = MARGIN_PT + (img_idx % 3) * (size_pt + GAP_PT)
+                y_pt = image_y_pt + (img_idx // 3) * (size_pt + GAP_PT)
+            image_requests.append(
                 {
                     "createImage": {
                         "objectId": image_id,
@@ -341,9 +380,22 @@ class GoogleSlidesBuilder:
             )
 
         if requests:
-            service.presentations().batchUpdate(
-                presentationId=presentation_id, body={"requests": requests}
-            ).execute()
+            # Execute text requests in chunks to avoid 500 "Internal error"
+            batch_size = 8
+            for i in range(0, len(requests), batch_size):
+                chunk = requests[i : i + batch_size]
+                service.presentations().batchUpdate(
+                    presentationId=presentation_id, body={"requests": chunk}
+                ).execute()
+
+        # Execute image requests separately; skip any that fail (e.g. too large)
+        for req in image_requests:
+            try:
+                service.presentations().batchUpdate(
+                    presentationId=presentation_id, body={"requests": [req]}
+                ).execute()
+            except HttpError as e:
+                print(f"Warning: Skipped image - {e}", file=sys.stderr)
 
     def _create_text_box_requests(
         self,
@@ -444,7 +496,7 @@ if __name__ == "__main__":
         SlideContent(
             title="Welcome",
             body="This presentation was created programmatically.\nAdd your content here.",
-            images=[],  # Add image URLs or paths when ready
+            images=["https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"],  # Add image URLs or paths when ready
         ),
         SlideContent(
             title="Slide Two",
