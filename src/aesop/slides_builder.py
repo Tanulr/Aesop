@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
-    from aesop.storybrand_schema import StoryBrandSchema
+    from aesop.storybrand_schema import StoryBrandSchema, StoryBrandStrategy
 
 # EMU = English Metric Units (1 inch = 914400 EMU, 1 pt = 12700 EMU)
 PT_TO_EMU = 12_700
@@ -122,6 +122,68 @@ def _storybrand_to_slide_content(schema: StoryBrandSchema) -> list[SlideContent]
     ]
 
 
+def strategy_to_slide_content(strategy: "StoryBrandStrategy") -> list[SlideContent]:
+    """Convert a StoryBrandStrategy to 7 SlideContent slides with generated images.
+
+    Uses hardcoded titles from the StoryBrand framework. Descriptions come from
+    the strategy. Generates an image for each slide based on its description.
+
+    Args:
+        strategy: The StoryBrandStrategy instance.
+
+    Returns:
+        List of 7 SlideContent objects, one per step.
+    """
+    from aesop.storybrand_schema import STORYBRAND_SLIDE_TITLES, StoryBrandStrategy
+
+    step_fields = [
+        "step_1_character",
+        "step_2_problem",
+        "step_3_guide",
+        "step_4_plan",
+        "step_5_action",
+        "step_7_success",
+        "step_6_failure",
+    ]
+    slides = []
+    for i, (title, field) in enumerate(zip(STORYBRAND_SLIDE_TITLES, step_fields)):
+        description = getattr(strategy, field)
+        image_url = StoryBrandStrategy.generate_image_for_step(description)
+        slides.append(
+            SlideContent(title=title, body=description, images=[image_url])
+        )
+    return slides
+
+
+def create_presentation_from_strategy(
+    strategy: "StoryBrandStrategy",
+    title: str = "StoryBrand Presentation",
+    credentials_path: str = "credentials.json",
+    token_path: str = "token.json",
+) -> str:
+    """Create a presentation from a StoryBrandStrategy and return the URL.
+
+    Builds 7 slides (one per step) with hardcoded titles, strategy descriptions,
+    and generated images. Creates the presentation and returns the edit link.
+
+    Args:
+        strategy: The StoryBrandStrategy instance.
+        title: Presentation title.
+        credentials_path: Path to credentials.
+        token_path: Path to token.
+
+    Returns:
+        The created presentation URL.
+    """
+    slides_content = strategy_to_slide_content(strategy)
+    return create_presentation(
+        title=title,
+        slides=slides_content,
+        credentials_path=credentials_path,
+        token_path=token_path,
+    )
+
+
 class GoogleSlidesBuilder:
     """Builds Google Slides presentations from structured content."""
 
@@ -148,7 +210,34 @@ class GoogleSlidesBuilder:
         self._drive_service = None
 
     def _get_credentials(self):
-        """Load or refresh OAuth2 credentials."""
+        """Load or refresh credentials. Supports service account JSON or OAuth2."""
+        import json as json_module
+
+        if not os.path.exists(self.credentials_path):
+            # Try Application Default Credentials (e.g. Cloud Run workload identity)
+            try:
+                import google.auth
+
+                creds, _ = google.auth.default(scopes=self.SCOPES)
+                return creds
+            except Exception:
+                raise FileNotFoundError(
+                    f"Credentials not found at {self.credentials_path}. "
+                    "Use a service account JSON or OAuth client secrets. "
+                    "On Cloud Run, mount credentials via Secret Manager."
+                ) from None
+
+        with open(self.credentials_path) as f:
+            data = json_module.load(f)
+
+        if data.get("type") == "service_account":
+            from google.oauth2 import service_account
+
+            return service_account.Credentials.from_service_account_file(
+                self.credentials_path, scopes=self.SCOPES
+            )
+
+        # OAuth2 client flow
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
@@ -160,12 +249,6 @@ class GoogleSlidesBuilder:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                if not os.path.exists(self.credentials_path):
-                    raise FileNotFoundError(
-                        f"Credentials not found at {self.credentials_path}. "
-                        "Download OAuth2 client secrets from Google Cloud Console "
-                        "and save as credentials.json."
-                    )
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_path, self.SCOPES
                 )
@@ -192,19 +275,63 @@ class GoogleSlidesBuilder:
             self._drive_service = build("drive", "v3", credentials=creds)
         return self._drive_service
 
-    def _resolve_image_url(self, source: str) -> str:
+    def _resolve_image_url(self, source: str, upload_to_drive: bool = True) -> str:
         """Convert image source to a publicly accessible URL.
 
-        If source is http(s), return as-is (converting Drive view URLs to
-        direct download format). If local path, upload to Drive and return
-        public URL.
+        - Drive URLs: convert view URLs to direct download format.
+        - Other http(s) URLs: if upload_to_drive, download and upload to Drive,
+          return Drive URL. Note: Drive URLs can be unreliable with Slides API.
+        - Local path: upload to Drive and return public URL.
         """
         if source.startswith(("http://", "https://")):
-            return self._convert_drive_url_to_direct(source)
+            if self._is_drive_url(source):
+                return self._convert_drive_url_to_direct(source)
+            if upload_to_drive:
+                return self._upload_image_from_url(source)
+            return source
         path = Path(source)
         if not path.exists():
             raise FileNotFoundError(f"Image not found: {source}")
         return self._upload_image_to_drive(path)
+
+    def _is_drive_url(self, url: str) -> bool:
+        """Return True if URL is a Google Drive file URL."""
+        return "drive.google.com" in url
+
+    def _upload_image_from_url(self, url: str) -> str:
+        """Download image from URL, upload to Drive or GCS, return public URL."""
+        import tempfile
+        from urllib.request import Request, urlopen
+
+        req = Request(url, headers={"User-Agent": "Aesop/1.0"})
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            try:
+                with urlopen(req, timeout=30) as resp:
+                    tmp.write(resp.read())
+                path = Path(tmp.name)
+                if os.environ.get("AESOP_GCS_BUCKET"):
+                    return self._upload_image_to_gcs(path)
+                return self._upload_image_to_drive(path)
+            finally:
+                try:
+                    os.unlink(tmp.name)
+                except OSError:
+                    pass
+
+    def _upload_image_to_gcs(self, path: Path) -> str:
+        """Upload to Google Cloud Storage, return public URL. Requires AESOP_GCS_BUCKET."""
+        from google.cloud import storage
+
+        bucket_name = os.environ["AESOP_GCS_BUCKET"]
+        creds = self._get_credentials()
+        client = storage.Client(credentials=creds)
+        bucket = client.bucket(bucket_name)
+        name = f"aesop/{uuid.uuid4().hex}{path.suffix}"
+        blob = bucket.blob(name)
+        mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+        blob.upload_from_filename(str(path), content_type=mime)
+        blob.make_public()
+        return blob.public_url
 
     def _convert_drive_url_to_direct(self, url: str) -> str:
         """Convert Google Drive view/share URLs to direct download format.
@@ -239,10 +366,7 @@ class GoogleSlidesBuilder:
             fileId=file_id,
             body={"type": "anyone", "role": "reader"},
         ).execute()
-        url = result.get("webContentLink")
-        if not url:
-            url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        return url
+        return f"https://drive.google.com/uc?export=download&id={file_id}"
 
     def _generate_object_id(self, prefix: str) -> str:
         """Generate a unique object ID for Slides API."""
@@ -435,14 +559,20 @@ class GoogleSlidesBuilder:
                     presentationId=presentation_id, body={"requests": chunk}
                 ).execute()
 
-        # Execute image requests separately; skip any that fail (e.g. too large)
+        # Execute image requests separately; Drive URLs can be flaky, so retry with delay
+        import time
         for req in image_requests:
-            try:
-                service.presentations().batchUpdate(
-                    presentationId=presentation_id, body={"requests": [req]}
-                ).execute()
-            except HttpError as e:
-                print(f"Warning: Skipped image - {e}", file=sys.stderr)
+            for attempt in range(3):
+                try:
+                    if attempt > 0:
+                        time.sleep(5)  # Space out retries - helps with Drive URL reliability
+                    service.presentations().batchUpdate(
+                        presentationId=presentation_id, body={"requests": [req]}
+                    ).execute()
+                    break
+                except HttpError as e:
+                    if attempt == 2:
+                        print(f"Warning: Skipped image after 3 attempts - {e}", file=sys.stderr)
 
     def _create_text_box_requests(
         self,
