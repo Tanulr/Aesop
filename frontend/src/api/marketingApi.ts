@@ -6,19 +6,24 @@
  */
 
 export async function generateCampaignLink(prompt: string): Promise<string> {
-  // --- HARDCODED STUB (replace with real fetch when backend is ready) ---
-  console.log('Generating campaign for prompt:', prompt);
-  await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s fake latency
-  return 'https://storymarketer.app/campaign/abc123';
-  // --- END STUB ---
+  console.log('Sending prompt to backend:', prompt);
+  
+  const response = await fetch('https://aesop-772493549962.us-central1.run.app/presentations/from-prompt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
 
-  // Real implementation will look like:
-  // const response = await fetch('http://localhost:8000/generate-campaign', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ prompt }),
-  // });
-  // if (!response.ok) throw new Error('Failed to generate campaign link');
-  // const data = await response.json();
-  // return data.url;
+  if (!response.ok) {
+    throw new Error('Failed to generate campaign data from server.');
+  }
+
+  // Parses the response that the FastAPI server returns after its 3-6 second delay
+  const data = await response.json();
+  
+  // Since the UI now displays a link instead of the raw data,
+  // we'll return a dynamic mock URL based on the response.
+  const campaignLink = data.link;
+  return campaignLink;
 }
+
