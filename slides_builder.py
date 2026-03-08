@@ -267,6 +267,7 @@ class GoogleSlidesBuilder:
         if content.title:
             title_height_pt = 54  # ~0.75"
             title_id = self._generate_object_id(f"Title_{slide_index}")
+            is_title_slide = slide_index == 0
             requests.extend(
                 self._create_text_box_requests(
                     slide_id=slide_id,
@@ -277,6 +278,10 @@ class GoogleSlidesBuilder:
                     width_pt=content_width_pt,
                     height_pt=title_height_pt,
                     font_size_pt=24,
+                    center_text=is_title_slide,
+                    foreground_color={"red": 0, "green": 0, "blue": 0}
+                    if is_title_slide
+                    else None,
                 )
             )
             y_offset_pt += title_height_pt + 18  # 0.25" gap
@@ -350,9 +355,35 @@ class GoogleSlidesBuilder:
         width_pt: float,
         height_pt: float,
         font_size_pt: int = 12,
+        center_text: bool = False,
+        foreground_color: dict | None = None,
     ) -> list[dict]:
-        """Build requests to create a text box and insert text."""
-        return [
+        """Build requests to create a text box and insert text.
+
+        Args:
+            slide_id: Target slide object ID.
+            object_id: Unique ID for the new shape.
+            text: Text content.
+            x_pt: X position in points.
+            y_pt: Y position in points.
+            width_pt: Box width in points.
+            height_pt: Box height in points.
+            font_size_pt: Font size in points.
+            center_text: If True, center-align paragraph text.
+            foreground_color: Optional RGB dict with red/green/blue 0-1.
+
+        Returns:
+            List of Slides API request dicts.
+        """
+        style_fields = ["fontSize"]
+        text_style = {"fontSize": {"magnitude": font_size_pt, "unit": "PT"}}
+        if foreground_color is not None:
+            style_fields.append("foregroundColor")
+            text_style["foregroundColor"] = {
+                "opaqueColor": {"rgbColor": foreground_color}
+            }
+
+        requests = [
             {
                 "createShape": {
                     "objectId": object_id,
@@ -384,13 +415,23 @@ class GoogleSlidesBuilder:
                 "updateTextStyle": {
                     "objectId": object_id,
                     "textRange": {"type": "ALL"},
-                    "style": {
-                        "fontSize": {"magnitude": font_size_pt, "unit": "PT"},
-                    },
-                    "fields": "fontSize",
+                    "style": text_style,
+                    "fields": ",".join(style_fields),
                 }
             },
         ]
+        if center_text:
+            requests.append(
+                {
+                    "updateParagraphStyle": {
+                        "objectId": object_id,
+                        "textRange": {"type": "ALL"},
+                        "style": {"alignment": "CENTER"},
+                        "fields": "alignment",
+                    }
+                }
+            )
+        return requests
 
     def _presentation_url(self, presentation_id: str) -> str:
         """Return the edit URL for a presentation."""
