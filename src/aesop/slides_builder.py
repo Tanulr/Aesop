@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
-    from storybrand_schema import StoryBrandSchema  # noqa: F401
+    from aesop.storybrand_schema import StoryBrandSchema
 
 # EMU = English Metric Units (1 inch = 914400 EMU, 1 pt = 12700 EMU)
 PT_TO_EMU = 12_700
@@ -98,7 +98,7 @@ def create_presentation_from_storybrand_json(
     Returns:
         The presentation URL.
     """
-    from storybrand_schema import StoryBrandSchema
+    from aesop.storybrand_schema import StoryBrandSchema
 
     schema = StoryBrandSchema.from_json(json_str)
     slides_content = _storybrand_to_slide_content(schema)
@@ -535,14 +535,3 @@ class GoogleSlidesBuilder:
     def _presentation_url(self, presentation_id: str) -> str:
         """Return the edit URL for a presentation."""
         return f"https://docs.google.com/presentation/d/{presentation_id}/edit"
-
-
-if __name__ == "__main__":
-    # Example: create from StoryBrand JSON
-    with open("storybrand_example.json") as f:
-        storybrand_json = f.read()
-    url = create_presentation_from_storybrand_json(
-        storybrand_json,
-        title="StoryBrand Framework",
-    )
-    print(f"Created: {url}")
