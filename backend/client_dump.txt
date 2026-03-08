@@ -1,0 +1,9 @@
+Hey team,
+
+Here are some raw notes from our kickoff meeting with the new client. 
+
+They are a small SaaS company trying to launch a new feature that helps designers organize their Figma files better. Right now their primary marketing site is https://trip.com but they also have some old docs scattered at https://duckduckgo.com. 
+
+The main thing they mentioned is that their users are super frustrated because they waste 2 hours a day just looking for the right hex codes and components across 50 different artboards. They want us to figure out how to frame their new "Auto-Organizer" tool so it feels like a lifesaver rather than just another plugin. 
+
+Let's run this through the AI.

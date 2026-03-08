@@ -1,0 +1,30 @@
+# Git and IDE
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Credentials - never bundle; mount at runtime
+credentials.json
+token.json
+*.pem
+
+# Tests and docs (not needed in container)
+tests/
+docs/
+*.md
+!README.md
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Other
+.DS_Store
+*.log

@@ -206,5 +206,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Sensitive / credentials - never commit
 credentials.json
 token.json
+service_acc_creds.json
+*_creds.json
+*credentials*.json
+*.pem
+*.key
