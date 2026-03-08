@@ -1,0 +1,37 @@
+{
+  "1_A_Character": {
+    "title": "Your Customer Is the Hero",
+    "description": "Your customer is the hero of the story, not your brand. Define who they are—their desires, their challenges, and what they're trying to accomplish. The more clearly you understand your hero, the more effectively you can speak to them.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "2_Has_a_Problem": {
+    "title": "Identify the Obstacles",
+    "description": "Every hero faces obstacles. Define the external problem (practical), internal problem (emotional), and philosophical problem (deeper meaning). A villain makes your story compelling—what is the thing standing between your customer and their success?",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "3_Meets_a_Guide": {
+    "title": "Your Brand as the Guide",
+    "description": "Your brand is the guide—the mentor who helps the hero succeed. Establish empathy (you understand their struggle) and authority (you have a credible solution). The guide never steals the hero's spotlight but empowers them to win.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "4_Who_Gives_Them_a_Plan": {
+    "title": "A Simple Path Forward",
+    "description": "Give your customer a clear, step-by-step plan that reduces their confusion and fear. Break down the process into simple, digestible steps. An unambiguous plan removes friction and builds confidence in your solution.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "5_That_Calls_Them_to_Action": {
+    "title": "The Call to Action",
+    "description": "Invite your customer to take action. Use a direct CTA (e.g., 'Buy now') for those ready to commit, and a transitional CTA (e.g., 'Download our guide') for those who need more information. Make the next step obvious.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "6_That_Ends_in_Success": {
+    "title": "Paint the Picture of Success",
+    "description": "Show your customer what life looks like after they choose your solution. Describe the transformation—the external, internal, and philosophical wins. Help them visualize the positive outcome and feel the relief of their problem solved.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  },
+  "7_And_Helps_Them_Avoid_Failure": {
+    "title": "The Stakes—What's at Risk",
+    "description": "Clarify what happens if the customer doesn't act. What do they lose? What failure do they avoid by following your plan? Stakes create urgency and help customers understand why taking action matters now.",
+    "image_url": "https://drive.google.com/file/d/105bmCoSuAwfBRJrSW1br9SvpxpbtmzY6/view?usp=sharing"
+  }
+}
