@@ -32,9 +32,19 @@ pip install -e ".[dev]"
 ```bash
 # Create a presentation from the StoryBrand example
 python -m aesop
+
+# Run the API server
+uvicorn api:app --reload
 ```
 
-Or use the API:
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deploying to Google Cloud Run.
+
+### API Endpoints
+
+- **POST `/presentations/storybrand`** – Accepts StoryBrand schema JSON, creates a presentation, returns the URL.
+- **POST `/presentations/from-prompt`** – Accepts `{"prompt": "brand description"}`, returns a link (dummy for now).
+
+Or use the API programmatically:
 
 ```python
 from aesop import create_presentation_from_storybrand_json, SlideContent, create_presentation

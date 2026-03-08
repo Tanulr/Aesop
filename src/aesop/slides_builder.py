@@ -148,7 +148,34 @@ class GoogleSlidesBuilder:
         self._drive_service = None
 
     def _get_credentials(self):
-        """Load or refresh OAuth2 credentials."""
+        """Load or refresh credentials. Supports service account JSON or OAuth2."""
+        import json as json_module
+
+        if not os.path.exists(self.credentials_path):
+            # Try Application Default Credentials (e.g. Cloud Run workload identity)
+            try:
+                import google.auth
+
+                creds, _ = google.auth.default(scopes=self.SCOPES)
+                return creds
+            except Exception:
+                raise FileNotFoundError(
+                    f"Credentials not found at {self.credentials_path}. "
+                    "Use a service account JSON or OAuth client secrets. "
+                    "On Cloud Run, mount credentials via Secret Manager."
+                ) from None
+
+        with open(self.credentials_path) as f:
+            data = json_module.load(f)
+
+        if data.get("type") == "service_account":
+            from google.oauth2 import service_account
+
+            return service_account.Credentials.from_service_account_file(
+                self.credentials_path, scopes=self.SCOPES
+            )
+
+        # OAuth2 client flow
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
@@ -160,12 +187,6 @@ class GoogleSlidesBuilder:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                if not os.path.exists(self.credentials_path):
-                    raise FileNotFoundError(
-                        f"Credentials not found at {self.credentials_path}. "
-                        "Download OAuth2 client secrets from Google Cloud Console "
-                        "and save as credentials.json."
-                    )
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_path, self.SCOPES
                 )
